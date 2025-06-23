@@ -7,15 +7,14 @@ import hashlib
 import base64
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 from functools import wraps
-from flask import Flask, render_template, request, jsonify, abort, make_response
+from flask import Flask, render_template, request, jsonify
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from flask_cors import CORS
 from werkzeug.security import generate_password_hash, check_password_hash
 from web3 import Web3, HTTPProvider
-from web3.middleware import geth_poa_middleware
 from eth_account import Account
 from eth_account.messages import encode_defunct
 from cryptography.fernet import Fernet, InvalidToken
@@ -45,16 +44,16 @@ CONFIG = {
     "LOG_DIR": "wallet_logs",
     "COIN_GECKO_API": "https://api.coingecko.com/api/v3",
     "NETWORK_PROVIDERS": {
-        "ethereum": "https://mainnet.infura.io/v3/YOUR_INFURA_PROJECT_ID",
+        "ethereum": os.getenv('INFURA_URL', "https://mainnet.infura.io/v3/1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d"),
         "bsc": "https://bsc-dataseed.binance.org/",
         "polygon": "https://polygon-rpc.com/",
-        "beldex": "https://rpc.beldex.io"  # Placeholder
+        "beldex": "https://rpc.beldex.io"  # Placeholder for Beldex
     },
     "SUPPORTED_COINS": {
         "bitcoin": {"name": "Bitcoin", "symbol": "BTC", "logo": "btc.png", "network": "bitcoin"},
         "ethereum": {"name": "Ethereum", "symbol": "ETH", "logo": "eth.png", "network": "ethereum"},
-        "usdt": {"name": "Tether", "symbol": "USDT", "logo": "usdt.png", "network": "ethereum"},
-        "usdc": {"name": "USD Coin", "symbol": "USDC", "logo": "usdc.png", "network": "ethereum"}
+        "usdt": {"name": "Tether", "symbol": "USDT", "logo": "usdt.png", "network": "ethereum", "contract": "0xdAC17F958D2ee523a2206206994597C13D831ec7"},
+        "usdc": {"name": "USD Coin", "symbol": "USDC", "logo": "usdc.png", "network": "ethereum", "contract": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"}
     },
     "TOKEN_ABI": [
         {
@@ -87,7 +86,7 @@ CONFIG = {
         }
     ],
     "JWT_EXPIRY_HOURS": 24,
-    "RATE_LIMIT": "100 per hour"
+    "RATE_LIMIT": "100/hour"
 }
 
 # Setup logging
@@ -105,11 +104,12 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Initialize rate limiter
+# Initialize rate limiter with updated syntax
 limiter = Limiter(
-    app,
     key_func=get_remote_address,
-    default_limits=[CONFIG["RATE_LIMIT"]]
+    app=app,
+    default_limits=[CONFIG["RATE_LIMIT"]],
+    storage_uri="memory://"
 )
 
 # Thread-safe wallet access
@@ -143,13 +143,17 @@ def require_auth(f):
 
 def validate_address(address: str, network: str) -> bool:
     """Validate blockchain address format."""
-    if network == "bitcoin":
-        return len(address) >= 26 and len(address) <= 62 and address.startswith(('1', '3', 'bc1'))
-    elif network in ["ethereum", "bsc", "polygon"]:
-        return Web3.is_address(address)
-    elif network == "beldex":
-        return len(address) == 98 and address.startswith('b')  # Placeholder
-    return False
+    try:
+        if network == "bitcoin":
+            return len(address) >= 26 and len(address) <= 62 and address.startswith(('1', '3', 'bc1'))
+        elif network in ["ethereum", "bsc", "polygon"]:
+            return Web3.is_address(address)
+        elif network == "beldex":
+            return len(address) == 98 and address.startswith('b')  # Placeholder for Beldex
+        return False
+    except Exception as e:
+        logger.error(f"Error validating address {address} for {network}: {e}")
+        return False
 
 def load_encryption_key() -> bytes:
     """Load or generate encryption key."""
@@ -194,16 +198,18 @@ def load_wallet(user_id: str, password: str) -> Optional[Account]:
         try:
             wallet_file = Path(CONFIG["WALLET_FILE"])
             if not wallet_file.exists():
+                logger.info(f"Wallet file {wallet_file} not found")
                 return None
             with open(wallet_file, 'r') as f:
                 wallets = json.load(f)
             user_wallet = wallets.get(user_id)
             if not user_wallet:
+                logger.info(f"No wallet found for user {user_id}")
                 return None
             key = hashlib.pbkdf2_hmac('sha256', password.encode(), base64.b64decode(user_wallet['salt']), 100000)
             private_key = decrypt_data(user_wallet['private_key'], base64.b64encode(key).decode())
             account = Account.from_key(private_key)
-            logger.info(f"Loaded wallet for user {user_id}")
+            logger.info(f"Loaded wallet for user {user_id}: {account.address}")
             return account
         except Exception as e:
             logger.error(f"Error loading wallet for user {user_id}: {e}")
@@ -228,7 +234,7 @@ def save_wallet(user_id: str, account: Account, password: str):
             }
             with open(wallet_file, 'w') as f:
                 json.dump(wallets, f, indent=4)
-            logger.info(f"Saved wallet for user {user_id}")
+            logger.info(f"Saved wallet for user {user_id}: {account.address}")
         except Exception as e:
             logger.error(f"Error saving wallet for user {user_id}: {e}")
             raise WalletError("Failed to save wallet", 500)
@@ -240,10 +246,9 @@ def get_web3_instance(network: str) -> Web3:
         if not url:
             raise WalletError(f"Unsupported network: {network}", 400)
         w3 = Web3(HTTPProvider(url))
-        if network in ["bsc", "polygon"]:
-            w3.middleware_onion.inject(geth_poa_middleware, layer=0)
         if not w3.is_connected():
             raise WalletError(f"Failed to connect to {network}", 503)
+        logger.info(f"Initialized Web3 for {network}")
         return w3
     except Exception as e:
         logger.error(f"Error initializing Web3 for {network}: {e}")
@@ -254,11 +259,13 @@ def handle_wallet_error(error: WalletError):
     """Handle custom wallet errors."""
     response = jsonify({"error": error.message})
     response.status_code = error.status_code
+    logger.error(f"Wallet error: {error.message} (Status: {error.status_code})")
     return response
 
 @app.errorhandler(404)
 def not_found(error):
     """Handle 404 errors."""
+    logger.warning(f"404 error: {error}")
     return jsonify({"error": "Resource not found"}), 404
 
 @app.errorhandler(500)
@@ -268,7 +275,7 @@ def server_error(error):
     return jsonify({"error": "Internal server error"}), 500
 
 @app.route('/api/register', methods=['POST'])
-@limiter.limit("10 per minute")
+@limiter.limit("10/minute")
 def register():
     """Register a new user."""
     try:
@@ -299,7 +306,7 @@ def register():
         raise WalletError(str(e), 500)
 
 @app.route('/api/login', methods=['POST'])
-@limiter.limit("10 per minute")
+@limiter.limit("10/minute")
 def login():
     """Login a user."""
     try:
@@ -327,7 +334,7 @@ def login():
 
 @app.route('/api/create-wallet', methods=['POST'])
 @require_auth
-@limiter.limit("5 per minute")
+@limiter.limit("5/minute")
 def create_wallet():
     """Create a new wallet for the user."""
     try:
@@ -338,8 +345,7 @@ def create_wallet():
             raise WalletError("Password required", 400)
         account = Account.create()
         save_wallet(user_id, account, password)
-        # Generate seed phrase (BIP-39)
-        seed_phrase = " ".join(Account._mnemonic_from_entropy(os.urandom(16)))
+        seed_phrase = account.mnemonic
         logger.info(f"Created wallet for user {user_id}: {account.address}")
         return jsonify({"address": account.address, "seedPhrase": seed_phrase})
     except Exception as e:
@@ -348,7 +354,7 @@ def create_wallet():
 
 @app.route('/api/restore-wallet', methods=['POST'])
 @require_auth
-@limiter.limit("5 per minute")
+@limiter.limit("5/minute")
 def restore_wallet():
     """Restore wallet from seed phrase."""
     try:
@@ -371,7 +377,7 @@ def restore_wallet():
 
 @app.route('/api/balance', methods=['POST'])
 @require_auth
-@limiter.limit("20 per minute")
+@limiter.limit("20/minute")
 def get_balance():
     """Get wallet balance for a coin."""
     try:
@@ -389,7 +395,8 @@ def get_balance():
             raise WalletError("Unsupported coin", 400)
         w3 = get_web3_instance(network)
         if coin_data["network"] == "bitcoin":
-            # Placeholder: Use Bitcoin API
+            # Placeholder: Use Bitcoin API (e.g., BlockCypher)
+            logger.info(f"Bitcoin balance fetching not implemented for {address}")
             return jsonify({"balance": "0", "symbol": coin})
         elif coin_data["network"] in ["ethereum", "bsc", "polygon"]:
             if coin in ["ETH", "BNB", "MATIC"]:
@@ -413,7 +420,7 @@ def get_balance():
 
 @app.route('/api/send-transaction', methods=['POST'])
 @require_auth
-@limiter.limit("10 per minute")
+@limiter.limit("10/minute")
 def send_transaction():
     """Send a transaction."""
     try:
@@ -434,13 +441,18 @@ def send_transaction():
         w3 = get_web3_instance(network)
         if coin in ["ETH", "BNB", "MATIC"]:
             nonce = w3.eth.get_transaction_count(account.address)
+            chain_id = {
+                "ethereum": 1,
+                "bsc": 56,
+                "polygon": 137
+            }.get(network, 1)
             tx = {
                 'nonce': nonce,
                 'to': Web3.to_checksum_address(recipient),
                 'value': w3.to_wei(amount, 'ether'),
                 'gas': 21000,
                 'gasPrice': w3.to_wei('50', 'gwei'),
-                'chainId': 1 if network == "ethereum" else 56 if network == "bsc" else 137
+                'chainId': chain_id
             }
             signed_tx = account.sign_transaction(tx)
             tx_hash = w3.eth.send_raw_transaction(signed_tx.rawTransaction)
@@ -454,7 +466,7 @@ def send_transaction():
 
 @app.route('/api/tokens', methods=['POST'])
 @require_auth
-@limiter.limit("20 per minute")
+@limiter.limit("20/minute")
 def get_tokens():
     """Get token balances for a wallet."""
     try:
@@ -487,7 +499,7 @@ def get_tokens():
 
 @app.route('/api/add-token', methods=['POST'])
 @require_auth
-@limiter.limit("10 per minute")
+@limiter.limit("10/minute")
 def add_token():
     """Add a new token to the wallet."""
     try:
@@ -504,7 +516,6 @@ def add_token():
         symbol = contract.functions.symbol().call()
         name = contract.functions.name().call()
         decimals = contract.functions.decimals().call()
-        # Update supported coins (in-memory; persist in production)
         CONFIG["SUPPORTED_COINS"][symbol.lower()] = {
             "name": name,
             "symbol": symbol,
@@ -520,7 +531,7 @@ def add_token():
 
 @app.route('/api/transactions', methods=['POST'])
 @require_auth
-@limiter.limit("20 per minute")
+@limiter.limit("20/minute")
 def get_transactions():
     """Get transaction history for a wallet."""
     try:
@@ -549,7 +560,7 @@ def get_transactions():
 
 @app.route('/api/ai-explain', methods=['POST'])
 @require_auth
-@limiter.limit("10 per minute")
+@limiter.limit("10/minute")
 def ai_explain():
     """Provide AI explanation for crypto-related text."""
     try:
@@ -573,7 +584,7 @@ def ai_explain():
         raise WalletError(str(e), 500)
 
 @app.route('/api/coin-prices', methods=['GET'])
-@limiter.limit("30 per minute")
+@limiter.limit("30/minute")
 def get_coin_prices():
     """Fetch live coin prices from CoinGecko."""
     try:
@@ -636,7 +647,7 @@ def index():
         return render_template("index.html", coins=coins_data)
     except Exception as e:
         logger.error(f"Error rendering homepage: {e}")
-        raise WalletError(f"Failed to load homepage: {str(e)}", 500)
+        raise WalletError(f"Failed to load homepage", 500)
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
@@ -660,11 +671,8 @@ def initialize_server():
         Path(CONFIG["LOG_DIR"]).mkdir(exist_ok=True)
         Path('static').mkdir(exist_ok=True)
         Path('templates').mkdir(exist_ok=True)
-        # Ensure encryption key exists
+        # Initialize encryption key
         load_encryption_key()
-        # Initialize supported coins with contract addresses (for ERC-20 tokens)
-        CONFIG["SUPPORTED_COINS"]["usdt"]["contract"] = "0xdAC17F958D2ee523a2206206994597C13D831ec7"
-        CONFIG["SUPPORTED_COINS"]["usdc"]["contract"] = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
         logger.info("Server initialized successfully")
     except Exception as e:
         logger.error(f"Server initialization failed: {e}")
