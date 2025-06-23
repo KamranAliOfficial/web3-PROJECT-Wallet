@@ -1,11 +1,17 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Kamran Crypto Wallet - Secure, multi-chain Web3 wallet with AI assistance and dApp integration." />
+  <meta name="author" content="KAC Technologies" />
+  <meta name="keywords" content="crypto wallet, Web3, Ethereum, Beldex, dApp, AI, KAC" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; style-src 'self' https://cdn.jsdelivr.net https://fonts.googleapis.com 'unsafe-inline'; img-src 'self' data: https://s2.coinmarketcap.com; connect-src 'self' https://api.coingecko.com https://mainnet.infura.io wss://mainnet.infura.io https://rpc.beldex.io https://bsc-dataseed.binance.org https://polygon-rpc.com;" />
   <title>Kamran Crypto Wallet</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/static/style.css" />
+  <link rel="icon" href="/static/kac.ico" type="image/x-icon" />
+  <script src="https://cdn.jsdelivr.net/npm/web3@1.10.0/dist/web3.min.js"></script>
   <style>
     body {
       background: linear-gradient(135deg, #0d0d0d, #1a1a1a);
@@ -13,73 +19,109 @@
       font-family: 'Inter', sans-serif;
       margin: 0;
       padding: 0;
+      overflow-x: hidden;
     }
-
     .wallet-header {
       display: flex;
       align-items: center;
+      justify-content: space-between;
       background-color: #161b22;
-      padding: 1rem 2rem;
+      padding: 1.5rem 2rem;
       border-bottom: 2px solid #30363d;
+      position: sticky;
+      top: 0;
+      z-index: 100;
     }
-
     .wallet-header img.logo {
-      height: 50px;
-      width: 50px;
-      margin-right: 15px;
+      height: 60px;
+      width: 60px;
+      margin-right: 1rem;
     }
-
     .wallet-header h1 {
-      font-size: 2rem;
+      font-size: 2.5rem;
       color: #00ffcc;
+      font-weight: 700;
     }
-
+    .wallet-controls {
+      display: flex;
+      gap: 1rem;
+      align-items: center;
+    }
+    .wallet-status {
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-weight: 600;
+    }
     main {
       padding: 2rem;
-      max-width: 1200px;
+      max-width: 1400px;
       margin: auto;
     }
-
     .coin-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
       gap: 1.5rem;
       margin-bottom: 3rem;
     }
-
     .coin-card {
       background-color: #21262d;
-      border-radius: 10px;
-      padding: 1rem;
+      border-radius: 12px;
+      padding: 1.5rem;
       text-align: center;
-      transition: transform 0.2s ease-in-out;
+      transition: transform 0.2s ease-in-out, box-shadow 0.2s;
     }
-
     .coin-card:hover {
       transform: scale(1.05);
-      box-shadow: 0 0 12px #00ffcc44;
+      box-shadow: 0 0 15px #00ffcc44;
     }
-
     .coin-logo {
-      width: 60px;
-      margin-bottom: 10px;
+      width: 50px;
+      margin-bottom: 0.75rem;
     }
-
     .wallet-container {
       background: #121212;
-      padding: 2rem;
+      padding: 2.5rem;
       border-radius: 16px;
-      box-shadow: 0 0 20px rgba(0, 255, 204, 0.2);
+      box-shadow: 0 0 25px rgba(0, 255, 204, 0.2);
       margin-top: 2rem;
     }
-
+    .wallet-tabs {
+      display: flex;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+      border-bottom: 2px solid #30363d;
+    }
+    .wallet-tab {
+      padding: 0.75rem 1.5rem;
+      background: none;
+      border: none;
+      color: #f5f5f5;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: all 0.3s;
+    }
+    .wallet-tab.active {
+      border-bottom: 2px solid #00ffcc;
+      color: #00ffcc;
+    }
+    .wallet-tab:hover {
+      color: #00ffcc;
+    }
+    .wallet-section {
+      display: none;
+    }
+    .wallet-section.active {
+      display: block;
+    }
     .wallet-input {
       display: flex;
       flex-wrap: wrap;
       gap: 1rem;
       margin-bottom: 2rem;
     }
-
     input, select {
       flex: 1;
       padding: 0.75rem;
@@ -88,8 +130,12 @@
       background: #222;
       color: #fff;
       min-width: 200px;
+      font-size: 0.95rem;
     }
-
+    input:focus, select:focus {
+      outline: none;
+      box-shadow: 0 0 0 3px rgba(0, 255, 204, 0.3);
+    }
     button {
       padding: 0.75rem 1.5rem;
       background: #00ffcc;
@@ -98,29 +144,31 @@
       color: #000;
       font-weight: 600;
       cursor: pointer;
+      transition: background 0.3s, transform 0.2s;
     }
-
-    .result {
+    button:hover {
+      background: #00ccaa;
+      transform: translateY(-2px);
+    }
+    .result, .transaction-list, .token-list {
       margin-top: 1.5rem;
       background: #1c1c1c;
-      padding: 1rem;
-      border-radius: 10px;
+      padding: 1.5rem;
+      border-radius: 12px;
     }
-
     .ai-section {
       margin-top: 2rem;
     }
-
     textarea {
       width: 100%;
-      height: 100px;
+      height: 120px;
       background: #222;
       border: none;
       border-radius: 10px;
       padding: 1rem;
       color: #fff;
+      font-size: 0.95rem;
     }
-
     .explanation {
       margin-top: 1rem;
       padding: 1rem;
@@ -128,199 +176,450 @@
       border-left: 4px solid #00ffcc;
       border-radius: 10px;
     }
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.8);
+      z-index: 200;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-content {
+      background: #21262d;
+      padding: 2rem;
+      border-radius: 12px;
+      max-width: 500px;
+      width: 90%;
+      text-align: center;
+    }
+    .modal-content input {
+      width: 100%;
+      margin-bottom: 1rem;
+    }
+    .transaction-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 0.75rem;
+      border-bottom: 1px solid #30363d;
+    }
+    .token-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.75rem;
+      border-bottom: 1px solid #30363d;
+    }
+    @media (max-width: 768px) {
+      .wallet-header {
+        flex-direction: column;
+        text-align: center;
+      }
+      .wallet-controls {
+        flex-direction: column;
+        width: 100%;
+      }
+      .wallet-input {
+        flex-direction: column;
+      }
+      input, select, button {
+        width: 100%;
+      }
+      .coin-grid {
+        grid-template-columns: 1fr;
+      }
+    }
   </style>
 </head>
-
 <body>
   <header class="wallet-header">
-    <img src="/static/kamran-logo.png" alt="Kamran Logo" class="logo" />
-    <h1>Kamran Crypto Wallet</h1>
+    <div class="wallet-brand">
+      <img src="/static/kamran-logo.png" alt="Kamran Logo" class="logo" />
+      <h1>Kamran Crypto Wallet</h1>
+    </div>
+    <div class="wallet-controls">
+      <select id="network-select">
+        <option value="ethereum">Ethereum Mainnet</option>
+        <option value="bsc">Binance Smart Chain</option>
+        <option value="polygon">Polygon</option>
+        <option value="beldex">Beldex</option>
+      </select>
+      <span id="wallet-status" class="wallet-status">Wallet Disconnected</span>
+      <button id="connect-wallet">Connect Wallet</button>
+    </div>
   </header>
 
   <main>
-    <!-- Live coin prices -->
-    <div class="coin-grid">
-      {% for coin in coins %}
-      <div class="coin-card">
-        <img src="{{ coin.logo }}" alt="{{ coin.name }}" class="coin-logo" />
-        <h2>{{ coin.name }}</h2>
-        <p>{{ coin.price }}</p>
-      </div>
-      {% endfor %}
+    <!-- Live Coin Prices -->
+    <div class="coin-grid" id="coin-grid">
+      <!-- Populated dynamically via JavaScript -->
     </div>
 
-    <!-- Wallet + AI -->
+    <!-- Wallet Container -->
     <div class="wallet-container">
-      <div class="wallet-input">
-        <input type="text" id="address" placeholder="Enter Wallet Address" />
-        <select id="coin">
-          <option value="ETH">ETH</option>
-          <option value="BNB">BNB</option>
-          <option value="BTC">BTC</option>
-        </select>
-        <button onclick="checkBalance()">Check Balance</button>
+      <div class="wallet-tabs">
+        <button class="wallet-tab active" data-tab="overview">Overview</button>
+        <button class="wallet-tab" data-tab="send">Send</button>
+        <button class="wallet-tab" data-tab="tokens">Tokens</button>
+        <button class="wallet-tab" data-tab="transactions">Transactions</button>
+        <button class="wallet-tab" data-tab="dapps">dApps</button>
       </div>
 
-      <div class="result" id="balanceResult">Wallet balance will appear here.</div>
+      <!-- Overview Section -->
+      <div class="wallet-section active" id="overview">
+        <div class="wallet-input">
+          <input type="text" id="address" placeholder="Enter Wallet Address" readonly />
+          <select id="coin">
+            <option value="ETH">ETH</option>
+            <option value="BNB">BNB</option>
+            <option value="MATIC">MATIC</option>
+          </select>
+          <button onclick="checkBalance()">Check Balance</button>
+        </div>
+        <div class="result" id="balanceResult">Wallet balance will appear here.</div>
+      </div>
 
+      <!-- Send Transaction Section -->
+      <div class="wallet-section" id="send">
+        <div class="wallet-input">
+          <input type="text" id="recipient" placeholder="Recipient Address" />
+          <input type="number" id="amount" placeholder="Amount" step="0.0001" />
+          <select id="send-coin">
+            <option value="ETH">ETH</option>
+            <option value="BNB">BNB</option>
+            <option value="MATIC">MATIC</option>
+          </select>
+          <button onclick="sendTransaction()">Send Transaction</button>
+        </div>
+        <div class="result" id="sendResult">Transaction status will appear here.</div>
+      </div>
+
+      <!-- Tokens Section -->
+      <div class="wallet-section" id="tokens">
+        <div class="wallet-input">
+          <input type="text" id="token-address" placeholder="Add Token Contract Address" />
+          <button onclick="addToken()">Add Token</button>
+        </div>
+        <div class="token-list" id="token-list">
+          <!-- Populated dynamically -->
+        </div>
+      </div>
+
+      <!-- Transactions Section -->
+      <div class="wallet-section" id="transactions">
+        <div class="transaction-list" id="transaction-list">
+          <!-- Populated dynamically -->
+        </div>
+      </div>
+
+      <!-- dApps Section -->
+      <div class="wallet-section" id="dapps">
+        <div class="wallet-input">
+          <input type="text" id="dapp-url" placeholder="Enter dApp URL (e.g., app.uniswap.org)" />
+          <button onclick="openDapp()">Open dApp</button>
+        </div>
+        <div class="result" id="dappResult">dApp interaction status will appear here.</div>
+      </div>
+
+      <!-- AI Explanation Section -->
       <div class="ai-section">
         <h3>AI Explain Wallet Info</h3>
-        <textarea id="explainText" placeholder="Paste any crypto message or address here..."></textarea>
+        <textarea id="explainText" placeholder="Paste any crypto message, address, or transaction hash..."></textarea>
         <button onclick="getExplanation()">Get AI Explanation</button>
         <div class="explanation" id="aiResult">Explanation will appear here.</div>
+      </div>
+    </div>
+
+    <!-- Wallet Creation/Restoration Modal -->
+    <div class="modal" id="wallet-modal">
+      <div class="modal-content">
+        <h2>Create or Restore Wallet</h2>
+        <input type="password" id="wallet-password" placeholder="Enter Password" />
+        <input type="text" id="seed-phrase" placeholder="Enter Seed Phrase (or leave blank to create)" />
+        <div class="wallet-input">
+          <button onclick="createWallet()">Create Wallet</button>
+          <button onclick="restoreWallet()">Restore Wallet</button>
+          <button onclick="closeModal()">Cancel</button>
+        </div>
       </div>
     </div>
   </main>
 
   <script>
+    const config = {
+      networkProviders: {
+        ethereum: 'https://mainnet.infura.io/v3/YOUR_INFURA_PROJECT_ID',
+        bsc: 'https://bsc-dataseed.binance.org/',
+        polygon: 'https://polygon-rpc.com/',
+        beldex: 'https://rpc.beldex.io' // Placeholder
+      },
+      coinGeckoApi: 'https://api.coingecko.com/api/v3',
+      supportedCoins: [
+        { id: 'ethereum', name: 'Ethereum', symbol: 'ETH', logo: '/static/eth-logo.png' },
+        { id: 'binancecoin', name: 'BNB', symbol: 'BNB', logo: '/static/bnb-logo.png' },
+        { id: 'matic-network', name: 'Polygon', symbol: 'MATIC', logo: '/static/matic-logo.png' }
+      ]
+    };
+
+    let web3 = null;
+    let walletAddress = localStorage.getItem('walletAddress') || null;
+
+    async function initWallet() {
+      const network = document.getElementById('network-select').value;
+      if (config.networkProviders[network]) {
+        web3 = new Web3(config.networkProviders[network]);
+      }
+      if (walletAddress) {
+        document.getElementById('address').value = walletAddress;
+        updateWalletStatus(true);
+        checkBalance();
+      } else {
+        document.getElementById('wallet-modal').style.display = 'flex';
+      }
+      fetchCoinPrices();
+    }
+
+    async function fetchCoinPrices() {
+      try {
+        const ids = config.supportedCoins.map(coin => coin.id).join(',');
+        const response = await fetch(`${config.coinGeckoApi}/simple/price?ids=${ids}&vs_currencies=usd`);
+        const data = await response.json();
+        const coinGrid = document.getElementById('coin-grid');
+        coinGrid.innerHTML = '';
+        config.supportedCoins.forEach(coin => {
+          const price = data[coin.id]?.usd || 'N/A';
+          const card = `
+            <div class="coin-card">
+              <img src="${coin.logo}" alt="${coin.name}" class="coin-logo" />
+              <h2>${coin.name}</h2>
+              <p>$${price}</p>
+            </div>
+          `;
+          coinGrid.innerHTML += card;
+        });
+      } catch (error) {
+        console.error('Error fetching coin prices:', error);
+      }
+    }
+
     async function checkBalance() {
       const address = document.getElementById('address').value;
       const coin = document.getElementById('coin').value;
-
-      const res = await fetch('http://127.0.0.1:5000/balance', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ address, coin })
-      });
-
-      const data = await res.json();
-      if (data.balance) {
-        document.getElementById('balanceResult').innerText = `Balance: ${data.balance} ${data.symbol}`;
-      } else {
-        document.getElementById('balanceResult').innerText = `Error: ${data.error}`;
+      try {
+        const response = await fetch('http://127.0.0.1:5000/balance', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ address, coin, network: document.getElementById('network-select').value })
+        });
+        const data = await response.json();
+        document.getElementById('balanceResult').innerText = data.balance
+          ? `Balance: ${data.balance} ${data.symbol}`
+          : `Error: ${data.error}`;
+      } catch (error) {
+        document.getElementById('balanceResult').innerText = `Error: ${error.message}`;
       }
     }
 
-    async function getExplanation() {
-      const text = document.getElementById('explainText').value;
-
-      const res = await fetch('http://127.0.0.1:5000/ai-explain', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ text })
-      });
-
-      const data = await res.json();
-      if (data.explanation) {
-        document.getElementById('aiResult').innerText = data.explanation;
-      } else {
-        document.getElementById('aiResult').innerText = `Error: ${data.error}`;
+    async function sendTransaction() {
+      const recipient = document.getElementById('recipient').value;
+      const amount = document.getElementById('amount').value;
+      const coin = document.getElementById('send-coin').value;
+      const network = document.getElementById('network-select').value;
+      try {
+        const response = await fetch('http://127.0.0.1:5000/send-transaction', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ recipient, amount, coin, network, password: prompt('Enter wallet password') })
+        });
+        const data = await response.json();
+        document.getElementById('sendResult').innerText = data.txHash
+          ? `Transaction sent: ${data.txHash}`
+          : `Error: ${data.error}`;
+        fetchTransactions();
+      } catch (error) {
+        document.getElementById('sendResult').innerText = `Error: ${error.message}`;
       }
     }
-  </script>
-</body>
-</html>
 
-
-
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Kamran Crypto Wallet</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/style.css" />
-  <style>
-    .wallet-header {
-      text-align: center;
-      margin-bottom: 1rem;
+    async function addToken() {
+      const tokenAddress = document.getElementById('token-address').value;
+      try {
+        const response = await fetch('http://127.0.0.1:5000/add-token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tokenAddress, network: document.getElementById('network-select').value })
+        });
+        const data = await response.json();
+        if (data.success) {
+          fetchTokens();
+          document.getElementById('token-address').value = '';
+        } else {
+          alert(`Error: ${data.error}`);
+        }
+      } catch (error) {
+        alert(`Error: ${error.message}`);
+      }
     }
-    .logo {
-      height: 80px;
-      margin-bottom: 0.5rem;
-    }
-    .coin-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 1.5rem;
-    }
-    .coin-card {
-      background: #1c1c1c;
-      padding: 1rem;
-      border-radius: 12px;
-      text-align: center;
-      box-shadow: 0 0 10px rgba(0,255,204,0.1);
-    }
-    .coin-logo {
-      height: 40px;
-      margin-bottom: 0.5rem;
-    }
-  </style>
-</head>
-<body>
-  <header class="wallet-header">
-    <img src="/static/kamran-logo.png" alt="Kamran Logo" class="logo" />
-    <h1 style="color:#00ffcc;">Kamran Crypto Wallet</h1>
-    <p style="color:#aaa;">Multi-Coin Wallet with AI Assistance</p>
-  </header>
 
-  <div class="wallet-container">
-    <div class="wallet-input">
-      <input type="text" id="address" placeholder="Enter Wallet Address" />
-      <select id="coin">
-        <option value="ETH">ETH</option>
-        <option value="BNB">BNB</option>
-        <option value="BTC">BTC</option>
-      </select>
-      <button onclick="checkBalance()">Check Balance</button>
-    </div>
-
-    <div class="result" id="balanceResult">Wallet balance will appear here.</div>
-
-    <div class="ai-section">
-      <h3>AI Explain Wallet Info</h3>
-      <textarea id="explainText" placeholder="Paste any crypto message or address here..."></textarea>
-      <button onclick="getExplanation()">Get AI Explanation</button>
-      <div class="explanation" id="aiResult">Explanation will appear here.</div>
-    </div>
-
-    <main>
-      <div class="coin-grid">
-        {% for coin in coins %}
-          <div class="coin-card">
-            <img src="{{ coin.logo }}" alt="{{ coin.name }}" class="coin-logo" />
-            <h2>{{ coin.name }}</h2>
-            <p>{{ coin.price }}</p>
+    async function fetchTokens() {
+      try {
+        const response = await fetch('http://127.0.0.1:5000/tokens', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ address: walletAddress, network: document.getElementById('network-select').value })
+        });
+        const data = await response.json();
+        const tokenList = document.getElementById('token-list');
+        tokenList.innerHTML = data.tokens.map(token => `
+          <div class="token-item">
+            <span>${token.name} (${token.symbol})</span>
+            <span>${token.balance}</span>
           </div>
-        {% endfor %}
-      </div>
-    </main>
-  </div>
+        `).join('');
+      } catch (error) {
+        console.error('Error fetching tokens:', error);
+      }
+    }
 
-  <script>
-    async function checkBalance() {
-      const address = document.getElementById('address').value;
-      const coin = document.getElementById('coin').value;
+    async function fetchTransactions() {
+      try {
+        const response = await fetch('http://127.0.0.1:5000/transactions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ address: walletAddress, network: document.getElementById('network-select').value })
+        });
+        const data = await response.json();
+        const transactionList = document.getElementById('transaction-list');
+        transactionList.innerHTML = data.transactions.map(tx => `
+          <div class="transaction-item">
+            <span>${tx.hash.slice(0, 10)}...</span>
+            <span>${tx.amount} ${tx.coin}</span>
+            <span>${tx.status}</span>
+          </div>
+        `).join('');
+      } catch (error) {
+        console.error('Error fetching transactions:', error);
+      }
+    }
 
-      const res = await fetch('http://127.0.0.1:5000/balance', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ address, coin })
-      });
+    async function createWallet() {
+      const password = document.getElementById('wallet-password').value;
+      try {
+        const response = await fetch('http://127.0.0.1:5000/create-wallet', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password })
+        });
+        const data = await response.json();
+        if (data.address) {
+          walletAddress = data.address;
+          localStorage.setItem('walletAddress', walletAddress);
+          document.getElementById('address').value = walletAddress;
+          updateWalletStatus(true);
+          alert(`Wallet created! Seed phrase: ${data.seedPhrase}\nSave this securely!`);
+          closeModal();
+          checkBalance();
+        } else {
+          alert(`Error: ${data.error}`);
+        }
+      } catch (error) {
+        alert(`Error: ${error.message}`);
+      }
+    }
 
-      const data = await res.json();
-      document.getElementById('balanceResult').innerText =
-        data.balance ? `Balance: ${data.balance} ${data.symbol}` : `Error: ${data.error}`;
+    async function restoreWallet() {
+      const password = document.getElementById('wallet-password').value;
+      const seedPhrase = document.getElementById('seed-phrase').value;
+      try {
+        const response = await fetch('http://127.0.0.1:5000/restore-wallet', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password, seedPhrase })
+        });
+        const data = await response.json();
+        if (data.address) {
+          walletAddress = data.address;
+          localStorage.setItem('walletAddress', walletAddress);
+          document.getElementById('address').value = walletAddress;
+          updateWalletStatus(true);
+          closeModal();
+          checkBalance();
+        } else {
+          alert(`Error: ${data.error}`);
+        }
+      } catch (error) {
+        alert(`Error: ${error.message}`);
+      }
+    }
+
+    async function openDapp() {
+      const dappUrl = document.getElementById('dapp-url').value;
+      try {
+        if (!dappUrl.startsWith('https://')) {
+          throw new Error('Invalid dApp URL');
+        }
+        window.location.href = dappUrl;
+      } catch (error) {
+        document.getElementById('dappResult').innerText = `Error: ${error.message}`;
+      }
     }
 
     async function getExplanation() {
       const text = document.getElementById('explainText').value;
-
-      const res = await fetch('http://127.0.0.1:5000/ai-explain', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text })
-      });
-
-      const data = await res.json();
-      document.getElementById('aiResult').innerText =
-        data.explanation ? data.explanation : `Error: ${data.error}`;
+      try {
+        const response = await fetch('http://127.0.0.1:5000/ai-explain', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text })
+        });
+        const data = await response.json();
+        document.getElementById('aiResult').innerText = data.explanation || `Error: ${data.error}`;
+      } catch (error) {
+        document.getElementById('aiResult').innerText = `Error: ${error.message}`;
+      }
     }
+
+    function updateWalletStatus(connected) {
+      const status = document.getElementById('wallet-status');
+      status.textContent = connected ? `Connected: ${walletAddress.slice(0, 6)}...` : 'Wallet Disconnected';
+      status.className = `wallet-status ${connected ? 'connected' : 'disconnected'}`;
+    }
+
+    function closeModal() {
+      document.getElementById('wallet-modal').style.display = 'none';
+    }
+
+    function switchTab(event) {
+      const tabs = document.querySelectorAll('.wallet-tab');
+      const sections = document.querySelectorAll('.wallet-section');
+      tabs.forEach(tab => tab.classList.remove('active'));
+      sections.forEach(section => section.classList.remove('active'));
+      event.target.classList.add('active');
+      document.getElementById(event.target.dataset.tab).classList.add('active');
+      if (event.target.dataset.tab === 'tokens') fetchTokens();
+      if (event.target.dataset.tab === 'transactions') fetchTransactions();
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      initWallet();
+      document.getElementById('network-select').addEventListener('change', initWallet);
+      document.getElementById('connect-wallet').addEventListener('click', () => {
+        document.getElementById('wallet-modal').style.display = 'flex';
+      });
+      document.querySelectorAll('.wallet-tab').forEach(tab => {
+        tab.addEventListener('click', switchTab);
+      });
+      document.getElementById('address').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') checkBalance();
+      });
+      document.getElementById('explainText').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') getExplanation();
+      });
+      setInterval(fetchCoinPrices, 60000); // Update prices every minute
+    });
   </script>
 </body>
 </html>
